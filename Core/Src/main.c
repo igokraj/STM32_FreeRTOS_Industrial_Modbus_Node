@@ -95,13 +95,24 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+ 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  char message1[] = "Hello";
+  char message2[] = " World\n";
+  char bufor[16];
   while (1)
   {
+    HAL_UART_Transmit(&huart2, (uint8_t*)message1, sizeof(message1) - 1, HAL_MAX_DELAY);
+    HAL_Delay(1000);
+    HAL_UART_Transmit(&huart2, (uint8_t*)message2, sizeof(message2) - 1, HAL_MAX_DELAY);
+    HAL_Delay(1000);
+    if (HAL_UART_Receive(&huart2, (uint8_t*)bufor, 1, 100) == HAL_OK)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)bufor, 1, HAL_MAX_DELAY);
+}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
