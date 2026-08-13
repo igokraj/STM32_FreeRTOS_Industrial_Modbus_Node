@@ -1,0 +1,52 @@
+# ---- Build output (CMake / STM32CubeIDE) ----
+build/
+Debug/
+Release/
+cmake-build-*/
+
+# ---- CMake generated ----
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# ---- STM32CubeIDE / Eclipse project files (regenerated on import) ----
+.metadata/
+.settings/
+.cproject
+.project
+Debug/
+RTE/
+
+# ---- STM32CubeMX backup/log files ----
+*.bak
+*_backup*
+*.log
+
+# ---- VS Code ----
+.vscode/
+!.vscode/extensions.json
+
+# ---- Toolchain / OS artifacts ----
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+*.d
+
+# ---- Windows ----
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ---- Editor/IDE misc ----
+*.swp
+*~
