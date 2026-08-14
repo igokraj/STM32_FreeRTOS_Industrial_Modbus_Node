@@ -23,6 +23,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+#include "stdbool.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -47,7 +48,11 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+#define MODBUS_RX_BUFFER_SIZE 256
+uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE]; // Buffer for the circular DMA
+volatile uint16_t modbus_rx_len = 0; // Length of the frame, handled in callback (volatile)
+volatile bool modbus_frame_ready = 0; // Status of the frame, handled in callback (volatile)
+static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TIM1 tick
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,24 +100,28 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
- 
+  HAL_TIM_Base_Start_IT(&htim1);
+  // TIM1 period = 1.75 ms = fixed Modbus RTU t3.5 (inter-frame silence) value for baud rates > 19200 bps
+
+  HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+  // Start continuous circular DMA reception into modbus_rx_buffer (runs in the background, never stops)
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  char message1[] = "Hello";
-  char message2[] = " World\n";
-  char bufor[16];
+  
   while (1)
   {
-    HAL_UART_Transmit(&huart2, (uint8_t*)message1, sizeof(message1) - 1, HAL_MAX_DELAY);
-    HAL_Delay(1000);
-    HAL_UART_Transmit(&huart2, (uint8_t*)message2, sizeof(message2) - 1, HAL_MAX_DELAY);
-    HAL_Delay(1000);
-    if (HAL_UART_Receive(&huart2, (uint8_t*)bufor, 1, 100) == HAL_OK)
-{
-    HAL_UART_Transmit(&huart2, (uint8_t*)bufor, 1, HAL_MAX_DELAY);
-}
+    if (modbus_frame_ready) {
+      HAL_UART_Transmit(&huart2, modbus_rx_buffer, modbus_rx_len, HAL_MAX_DELAY);
+      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+      HAL_UART_DMAStop(&huart2);
+      HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+
+      modbus_rx_last_pos = 0;
+      modbus_frame_ready = 0;
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -168,7 +177,25 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+// Fires every 1.75 ms (TIM1 overflow). Detects Modbus frame end by checking whether the DMA write position has stayed the same since the last tick.
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+ if (htim->Instance == TIM1) { 
+  
+    // current DMA write offset in the buffer (counts up as bytes arrive)
+    uint16_t pos = MODBUS_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
 
+    // check if there are any new bytes since the last 1.75 ms tick
+    if (pos != modbus_rx_last_pos) {
+      modbus_rx_last_pos = pos;
+    }
+    // no new bytes for a full 1.75 ms tick -> silence detected, frame is complete
+    else if (pos != 0 && !modbus_frame_ready) {
+      modbus_rx_len = pos;
+      modbus_frame_ready = true;
+    }
+    }
+}
 /* USER CODE END 4 */
 
 /**
