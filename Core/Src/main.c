@@ -24,6 +24,7 @@
 #include "usart.h"
 #include "gpio.h"
 #include "stdbool.h"
+#include "crc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -113,8 +114,21 @@ int main(void)
   while (1)
   {
     if (modbus_frame_ready) {
-      HAL_UART_Transmit(&huart2, modbus_rx_buffer, modbus_rx_len, HAL_MAX_DELAY);
-      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+      if (modbus_rx_len >= 4) {
+      // Frame integrity check: compare the CRC the sender attached and the CRC we compute ourselves
+      uint16_t received_crc = modbus_rx_buffer[modbus_rx_len - 2] | (modbus_rx_buffer[modbus_rx_len - 1] << 8); // CRC sent by the master (low byte first, then high byte)
+      uint16_t calculated_crc = crc16_modbus(modbus_rx_buffer, modbus_rx_len - 2); // CRC we calculate locally with the standard C algorithm (crc.c)
+
+
+      //  **** VERIFICATION ****
+      if (received_crc == calculated_crc) {
+        // CRC matches -> frame is valid, echo it back and blink the LED
+        HAL_UART_Transmit(&huart2, modbus_rx_buffer, modbus_rx_len, HAL_MAX_DELAY);
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+      }
+      // else: CRC mismatch -> corrupted frame, just ignore it 
+      }
 
       HAL_UART_DMAStop(&huart2);
       HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
