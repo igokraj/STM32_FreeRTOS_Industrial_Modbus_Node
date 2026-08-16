@@ -100,8 +100,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-    HAL_Init();
-
+  HAL_Init();
+  __HAL_DBGMCU_FREEZE_IWDG(); // Freeze IWDG when the debugger halts the core, otherwise debugging resets the MCU
 
   /* USER CODE BEGIN Init */
 
