@@ -100,7 +100,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    HAL_Init();
+
 
   /* USER CODE BEGIN Init */
 
@@ -128,6 +129,9 @@ int main(void)
   // Start continuous circular DMA reception into modbus_rx_buffer (runs in the background, never stops)
 
   uint32_t last_temp_read_tick = 0;
+
+  // Expose the cause of the reset that just happened as a Modbus register
+  holding_registers_map[2] = read_last_reset_cause_from_flash();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -198,7 +202,7 @@ int main(void)
       modbus_frame_ready = 0;
     }
 
-    HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
+          HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
