@@ -154,6 +154,7 @@ int main(void)
             modbus_tx_buffer[5] = response_crc & 0xFF;
             modbus_tx_buffer[6] = (response_crc >> 8) & 0xFF;
             
+            // for testing:
             HAL_UART_Transmit(&huart2, modbus_tx_buffer, 7, HAL_MAX_DELAY);
             HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
           }
