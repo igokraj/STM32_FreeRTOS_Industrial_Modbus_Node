@@ -62,9 +62,15 @@ static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TI
 uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
-// **** EMERGENCY STOP BUTTON ****
-volatile uint8_t Cylnder_inserted;
+// **** SYSTEM STATUS **** 
 
+typedef enum {
+  STATE_INIT, // System start status 
+  STATE_NORMAL, // System works normally 
+  STATE_FAULT, // System failed 
+} System_State_t;
+
+volatile System_State_t system_state = STATE_INIT;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,9 +126,6 @@ int main(void)
   // Start continuous circular DMA reception into modbus_rx_buffer (runs in the background, never stops)
 
   uint32_t last_temp_read_tick = 0;
-
-  // Read the initial state of the limit switch (don't wait for the first EXTI edge)
-  holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,10 +135,17 @@ int main(void)
   {
     // Save the current temp. into register_map every 1 second
     if (HAL_GetTick() - last_temp_read_tick >= 1000) {
-      holding_registers_map[0] = read_htu21d_temperature();
-      last_temp_read_tick = HAL_GetTick();
+  uint16_t temp = read_htu21d_temperature();
+
+  if (temp == 0xFFFF) {
+    system_state = STATE_FAULT;
+    } else {
+    holding_registers_map[0] = temp;
+    system_state = STATE_NORMAL;
     }
 
+  last_temp_read_tick = HAL_GetTick();
+}
     if (modbus_frame_ready) {
 
       if (modbus_rx_len >= 8) {
@@ -150,7 +160,7 @@ int main(void)
         uint8_t slave_address = modbus_rx_buffer[0];
         uint8_t function_code = modbus_rx_buffer[1];
 
-        if (slave_address == SLAVE_ADDRESS && function_code == 0x03) {
+        if (slave_address == SLAVE_ADDRESS && function_code == 0x03 && system_state != STATE_FAULT) {
 
           uint16_t reg_address = (modbus_rx_buffer[2] << 8) | modbus_rx_buffer[3];
           uint16_t reg_count = (modbus_rx_buffer[4] << 8) | modbus_rx_buffer[5];
@@ -185,6 +195,8 @@ int main(void)
       modbus_rx_last_pos = 0;
       modbus_frame_ready = 0;
     }
+
+    HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -262,7 +274,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
-// Read the state of the cylinder limit switch
+// Read the state of the cylinder
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == Cylinder_Limit_Switch_Pin_Pin) {
