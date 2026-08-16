@@ -9,6 +9,16 @@ BAUDRATE = 115200
 SLAVE_ADDRESS = 1
 READ_HOLDING_REGISTERS = 0x03
 
+RESET_CAUSE_NAMES = {
+    0: "UNKNOWN",
+    1: "POWER_ON",
+    2: "PIN",
+    3: "WATCHDOG_IWDG",
+    4: "WATCHDOG_WWDG",
+    5: "SOFTWARE",
+    6: "BROWNOUT",
+}
+
 
 def crc16_modbus(data: bytes) -> int:
     crc = 0xFFFF
@@ -79,9 +89,26 @@ def main():
 
     time.sleep(0.5)
 
-    # Test 3: read out-of-range register (5, but REGISTER_COUNT=4) - should get no response
+    # Test 3: read register 2 - cause of the last reset (logged to Flash at boot)
+    reset_cause_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=2, reg_count=1)
+    print(f"\n[3] Sending request (read register 2 - last reset cause): {reset_cause_request.hex(' ')}")
+    ser.write(reset_cause_request)
+    time.sleep(0.1)
+    response = ser.read(64)
+    print(f"    Received: {response.hex(' ') if response else '(nothing)'}")
+
+    if len(response) == 7:
+        reset_cause = (response[3] << 8) | response[4]
+        name = RESET_CAUSE_NAMES.get(reset_cause, "UNKNOWN VALUE")
+        print(f"    Last reset cause: {reset_cause} ({name})")
+    else:
+        print("    FAIL - unexpected response length")
+
+    time.sleep(0.5)
+
+    # Test 4: read out-of-range register (5, but REGISTER_COUNT=4) - should get no response
     bad_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=5, reg_count=1)
-    print(f"\n[3] Sending request (out-of-range register 5): {bad_request.hex(' ')}")
+    print(f"\n[4] Sending request (out-of-range register 5): {bad_request.hex(' ')}")
     ser.write(bad_request)
     time.sleep(0.1)
     response = ser.read(64)
@@ -90,9 +117,9 @@ def main():
 
     time.sleep(0.5)
 
-    # Test 3: wrong slave address (2 instead of 1) - should get no response
+    # Test 5: wrong slave address (2 instead of 1) - should get no response
     wrong_addr_request = build_read_request(2, READ_HOLDING_REGISTERS, reg_address=0, reg_count=1)
-    print(f"\n[4] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
+    print(f"\n[5] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
     ser.write(wrong_addr_request)
     time.sleep(0.1)
     response = ser.read(64)

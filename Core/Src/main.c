@@ -20,7 +20,7 @@
 #include "main.h"
 #include "dma.h"
 #include "i2c.h"
-#include "stm32f4xx_hal_gpio.h"
+#include "iwdg.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -30,6 +30,7 @@
 #include "stdbool.h"
 #include "crc.h"
 #include "temp_sensor.h"
+#include "reset_log.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,9 +63,15 @@ static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TI
 uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
-// **** EMERGENCY STOP BUTTON ****
-volatile uint8_t Cylnder_inserted;
+// **** SYSTEM STATUS **** 
 
+typedef enum {
+  STATE_INIT, // System start status 
+  STATE_NORMAL, // System works normally 
+  STATE_FAULT, // System failed 
+} System_State_t;
+
+volatile System_State_t system_state = STATE_INIT;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,13 +93,15 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  ResetCause_t reset_cause = get_reset_cause();
+  log_reset_cause_to_flash(reset_cause);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    HAL_Init();
+
 
   /* USER CODE BEGIN Init */
 
@@ -111,6 +120,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   MX_TIM1_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim1);
   // TIM1 period = 1.75 ms = fixed Modbus RTU t3.5 (inter-frame silence) value for baud rates > 19200 bps
@@ -120,8 +130,8 @@ int main(void)
 
   uint32_t last_temp_read_tick = 0;
 
-  // Read the initial state of the limit switch (don't wait for the first EXTI edge)
-  holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
+  // Expose the cause of the reset that just happened as a Modbus register
+  holding_registers_map[2] = read_last_reset_cause_from_flash();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,10 +141,17 @@ int main(void)
   {
     // Save the current temp. into register_map every 1 second
     if (HAL_GetTick() - last_temp_read_tick >= 1000) {
-      holding_registers_map[0] = read_htu21d_temperature();
-      last_temp_read_tick = HAL_GetTick();
+  uint16_t temp = read_htu21d_temperature();
+
+  if (temp == 0xFFFF) {
+    system_state = STATE_FAULT;
+    } else {
+    holding_registers_map[0] = temp;
+    system_state = STATE_NORMAL;
     }
 
+  last_temp_read_tick = HAL_GetTick();
+}
     if (modbus_frame_ready) {
 
       if (modbus_rx_len >= 8) {
@@ -149,7 +166,7 @@ int main(void)
         uint8_t slave_address = modbus_rx_buffer[0];
         uint8_t function_code = modbus_rx_buffer[1];
 
-        if (slave_address == SLAVE_ADDRESS && function_code == 0x03) {
+        if (slave_address == SLAVE_ADDRESS && function_code == 0x03 && system_state != STATE_FAULT) {
 
           uint16_t reg_address = (modbus_rx_buffer[2] << 8) | modbus_rx_buffer[3];
           uint16_t reg_count = (modbus_rx_buffer[4] << 8) | modbus_rx_buffer[5];
@@ -184,6 +201,8 @@ int main(void)
       modbus_rx_last_pos = 0;
       modbus_frame_ready = 0;
     }
+
+          HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -208,9 +227,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
@@ -260,7 +280,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
-// Read the state of the cylinder limit switch
+// Read the state of the cylinder
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == Cylinder_Limit_Switch_Pin_Pin) {

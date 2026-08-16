@@ -26,7 +26,7 @@ if (HAL_I2C_Master_Receive(&hi2c1, HTU21D_ADDR, data, 3, Timeout_delay) != HAL_O
 }
 
 // data conversion
- uint16_t raw_temp = ((data[0] << 8) | data[1]) & 0xFFFC; // mask status bits
+uint16_t raw_temp = ((data[0] << 8) | data[1]) & 0xFFFC; // mask status bits
 float temperature = -46.85f + (175.72f * raw_temp / 65536.0f);
 
 
