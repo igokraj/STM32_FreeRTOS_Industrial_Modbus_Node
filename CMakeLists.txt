@@ -47,6 +47,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/crc.c
     Core/Src/temp_sensor.c
+    Core/Src/reset_log.c
 )
 
 # Add include paths

@@ -30,6 +30,7 @@
 #include "stdbool.h"
 #include "crc.h"
 #include "temp_sensor.h"
+#include "reset_log.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,7 +93,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  ResetCause_t reset_cause = get_reset_cause();
+  log_reset_cause_to_flash(reset_cause);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
