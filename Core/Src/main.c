@@ -23,12 +23,11 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-#include "stdbool.h"
-#include "crc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdbool.h"
+#include "crc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -54,6 +53,14 @@ uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE]; // Buffer for the circular DMA
 volatile uint16_t modbus_rx_len = 0; // Length of the frame, handled in callback (volatile)
 volatile bool modbus_frame_ready = 0; // Status of the frame, handled in callback (volatile)
 static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TIM1 tick
+
+
+#define SLAVE_ADDRESS 1 // devicde ID
+#define REGISTER_COUNT 4 // Number of registers
+
+uint16_t holding_registers_map[REGISTER_COUNT] = {1234, 0 ,0 ,0}; // Register map
+uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -115,7 +122,7 @@ int main(void)
   {
     if (modbus_frame_ready) {
 
-      if (modbus_rx_len >= 4) {
+      if (modbus_rx_len >= 8) {
       // Frame integrity check: compare the CRC the sender attached and the CRC we compute ourselves
       uint16_t received_crc = modbus_rx_buffer[modbus_rx_len - 2] | (modbus_rx_buffer[modbus_rx_len - 1] << 8); // CRC sent by the master (low byte first, then high byte)
       uint16_t calculated_crc = crc16_modbus(modbus_rx_buffer, modbus_rx_len - 2); // CRC we calculate locally with the standard C algorithm (crc.c)
@@ -123,9 +130,38 @@ int main(void)
 
       //  **** VERIFICATION ****
       if (received_crc == calculated_crc) {
-        // CRC matches -> frame is valid, echo it back and blink the LED
-        HAL_UART_Transmit(&huart2, modbus_rx_buffer, modbus_rx_len, HAL_MAX_DELAY);
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        // CRC matches -> frame is valid
+        uint8_t slave_address = modbus_rx_buffer[0];
+        uint8_t function_code = modbus_rx_buffer[1];
+
+        if (slave_address == SLAVE_ADDRESS && function_code == 0x03) {
+
+          uint16_t reg_address = (modbus_rx_buffer[2] << 8) | modbus_rx_buffer[3];
+          uint16_t reg_count = (modbus_rx_buffer[4] << 8) | modbus_rx_buffer[5];
+
+          if (reg_address < REGISTER_COUNT && reg_count == 1) {
+
+            // Build the response frame
+
+            modbus_tx_buffer[0] = SLAVE_ADDRESS; // Device ID
+            modbus_tx_buffer[1] = 0x03; // function code (0x03 -> read)
+            modbus_tx_buffer[2] = 2; // byte count
+            modbus_tx_buffer[3] = (holding_registers_map[reg_address] >> 8) & 0xFF; // high byte
+            modbus_tx_buffer[4] = holding_registers_map[reg_address] & 0xFF; // low byte
+
+            // Compute CRC and attach it to the response
+            uint16_t response_crc = crc16_modbus(modbus_tx_buffer, 5);
+            modbus_tx_buffer[5] = response_crc & 0xFF;
+            modbus_tx_buffer[6] = (response_crc >> 8) & 0xFF;
+            
+            // for testing:
+            HAL_UART_Transmit(&huart2, modbus_tx_buffer, 7, HAL_MAX_DELAY);
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+          }
+
+
+
+        }
       }
       // else: CRC mismatch -> corrupted frame, just ignore it 
       }
@@ -191,6 +227,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 // Fires every 1.75 ms (TIM1 overflow). Detects Modbus frame end by checking whether the DMA write position has stayed the same since the last tick.
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
