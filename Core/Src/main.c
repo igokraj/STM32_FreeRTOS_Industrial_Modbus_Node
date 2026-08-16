@@ -20,6 +20,7 @@
 #include "main.h"
 #include "dma.h"
 #include "i2c.h"
+#include "stm32f4xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -115,6 +116,8 @@ int main(void)
 
   HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
   // Start continuous circular DMA reception into modbus_rx_buffer (runs in the background, never stops)
+
+  uint16_t last_temp_read_tick = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -122,6 +125,12 @@ int main(void)
   
   while (1)
   {
+    // Save the current temp. into register_map every 1 second
+    if (HAL_GetTick() - last_temp_read_tick >= 1000) {
+      holding_registers_map[0] = read_htu21d_temperature();
+      last_temp_read_tick = HAL_GetTick();
+    }
+
     if (modbus_frame_ready) {
 
       if (modbus_rx_len >= 8) {
