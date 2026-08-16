@@ -14,11 +14,16 @@ uint8_t cmd = TEMP_CMD;
 uint8_t data[3]; // buffer for the data 
 
 // Master sends request
-HAL_I2C_Master_Transmit(&hi2c1, HTU21D_ADDR, &cmd, 1, Timeout_delay);
+if (HAL_I2C_Master_Transmit(&hi2c1, HTU21D_ADDR, &cmd, 1, Timeout_delay) != HAL_OK) {
+    return 0xFFFF; // I2C failed - return error value 
+}
+
 HAL_Delay(50);
 
 // Master receives the data
-HAL_I2C_Master_Receive(&hi2c1, HTU21D_ADDR, data, 3, Timeout_delay);
+if (HAL_I2C_Master_Receive(&hi2c1, HTU21D_ADDR, data, 3, Timeout_delay) != HAL_OK) {
+    return 0xFFFF; // I2C failed - return error value
+}
 
 // data conversion
  uint16_t raw_temp = ((data[0] << 8) | data[1]) & 0xFFFC; // mask status bits

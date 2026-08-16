@@ -59,7 +59,7 @@ static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TI
 
 #define SLAVE_ADDRESS 1 // devicde ID
 #define REGISTER_COUNT 4 // Number of registers
-uint16_t holding_registers_map[REGISTER_COUNT] = {1234, 0 ,0 ,0}; // Register map
+uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
 
