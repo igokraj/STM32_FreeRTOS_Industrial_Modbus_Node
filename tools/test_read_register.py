@@ -63,9 +63,25 @@ def main():
 
     time.sleep(0.5)
 
-    # Test 2: read out-of-range register (5, but REGISTER_COUNT=4) - should get no response
+    # Test 2: read register 1 - cylinder limit switch state (raw 0/1, no scaling)
+    switch_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=1, reg_count=1)
+    print(f"\n[2] Sending request (read register 1 - limit switch): {switch_request.hex(' ')}")
+    ser.write(switch_request)
+    time.sleep(0.1)
+    response = ser.read(64)
+    print(f"    Received: {response.hex(' ') if response else '(nothing)'}")
+
+    if len(response) == 7:
+        switch_state = (response[3] << 8) | response[4]
+        print(f"    Limit switch state: {switch_state} ({'pressed' if switch_state == 1 else 'released' if switch_state == 0 else 'unexpected value'})")
+    else:
+        print("    FAIL - unexpected response length")
+
+    time.sleep(0.5)
+
+    # Test 3: read out-of-range register (5, but REGISTER_COUNT=4) - should get no response
     bad_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=5, reg_count=1)
-    print(f"\n[2] Sending request (out-of-range register 5): {bad_request.hex(' ')}")
+    print(f"\n[3] Sending request (out-of-range register 5): {bad_request.hex(' ')}")
     ser.write(bad_request)
     time.sleep(0.1)
     response = ser.read(64)
@@ -76,7 +92,7 @@ def main():
 
     # Test 3: wrong slave address (2 instead of 1) - should get no response
     wrong_addr_request = build_read_request(2, READ_HOLDING_REGISTERS, reg_address=0, reg_count=1)
-    print(f"\n[3] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
+    print(f"\n[4] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
     ser.write(wrong_addr_request)
     time.sleep(0.1)
     response = ser.read(64)

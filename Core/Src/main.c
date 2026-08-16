@@ -20,6 +20,7 @@
 #include "main.h"
 #include "dma.h"
 #include "i2c.h"
+#include "stm32f4xx_hal_gpio.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -50,7 +51,6 @@
 
 /* USER CODE BEGIN PV */
 // **** MODBUS ****
-
 #define MODBUS_RX_BUFFER_SIZE 256
 uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE]; // Buffer for the circular DMA
 volatile uint16_t modbus_rx_len = 0; // Length of the frame, handled in callback (volatile)
@@ -62,6 +62,8 @@ static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TI
 uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
+// **** EMERGENCY STOP BUTTON ****
+volatile uint8_t Cylnder_inserted;
 
 /* USER CODE END PV */
 
@@ -117,6 +119,9 @@ int main(void)
   // Start continuous circular DMA reception into modbus_rx_buffer (runs in the background, never stops)
 
   uint32_t last_temp_read_tick = 0;
+
+  // Read the initial state of the limit switch (don't wait for the first EXTI edge)
+  holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -168,9 +173,6 @@ int main(void)
             HAL_UART_Transmit(&huart2, modbus_tx_buffer, 7, HAL_MAX_DELAY);
             HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
           }
-
-
-
         }
       }
       // else: CRC mismatch -> corrupted frame, just ignore it 
@@ -256,6 +258,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       modbus_frame_ready = true;
     }
     }
+}
+
+// Read the state of the cylinder limit switch
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == Cylinder_Limit_Switch_Pin_Pin) {
+    holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
+  }
 }
 /* USER CODE END 4 */
 
