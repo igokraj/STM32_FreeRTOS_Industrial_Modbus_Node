@@ -58,7 +58,7 @@ volatile uint16_t modbus_rx_len = 0; // Length of the frame, handled in callback
 volatile bool modbus_frame_ready = 0; // Status of the frame, handled in callback (volatile)
 static uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TIM1 tick
 
-#define SLAVE_ADDRESS 1 // devicde ID
+#define SLAVE_ADDRESS 1 // device ID
 #define REGISTER_COUNT 4 // Number of registers
 uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
@@ -143,6 +143,7 @@ int main(void)
     if (HAL_GetTick() - last_temp_read_tick >= 1000) {
   uint16_t temp = read_htu21d_temperature();
 
+  // Update the register on a valid reading; a failed read (0xFFFF) puts the node into FAULT state
   if (temp == 0xFFFF) {
     system_state = STATE_FAULT;
     } else {
@@ -154,6 +155,7 @@ int main(void)
 }
     if (modbus_frame_ready) {
 
+      // Shortest valid 0x03 request is 8 bytes: address + function + reg addr(2) + count(2) + CRC(2)
       if (modbus_rx_len >= 8) {
       // Frame integrity check: compare the CRC the sender attached and the CRC we compute ourselves
       uint16_t received_crc = modbus_rx_buffer[modbus_rx_len - 2] | (modbus_rx_buffer[modbus_rx_len - 1] << 8); // CRC sent by the master (low byte first, then high byte)
@@ -166,11 +168,13 @@ int main(void)
         uint8_t slave_address = modbus_rx_buffer[0];
         uint8_t function_code = modbus_rx_buffer[1];
 
+        // Respond only when addressed, for a supported function, and while not in FAULT (fail-safe: stay silent)
         if (slave_address == SLAVE_ADDRESS && function_code == 0x03 && system_state != STATE_FAULT) {
 
           uint16_t reg_address = (modbus_rx_buffer[2] << 8) | modbus_rx_buffer[3];
           uint16_t reg_count = (modbus_rx_buffer[4] << 8) | modbus_rx_buffer[5];
 
+          // Reject reads past the register map; only single-register reads are supported for now
           if (reg_address < REGISTER_COUNT && reg_count == 1) {
 
             // Build the response frame
@@ -186,7 +190,7 @@ int main(void)
             modbus_tx_buffer[5] = response_crc & 0xFF;
             modbus_tx_buffer[6] = (response_crc >> 8) & 0xFF;
             
-            // for testing:
+            // Send the response back to the master
             HAL_UART_Transmit(&huart2, modbus_tx_buffer, 7, HAL_MAX_DELAY);
             HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
           }
@@ -195,9 +199,11 @@ int main(void)
       // else: CRC mismatch -> corrupted frame, just ignore it 
       }
 
+      // Restart DMA so the next frame starts writing at buffer position 0 again
       HAL_UART_DMAStop(&huart2);
       HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
 
+      // Reset frame tracking so the next frame is detected from scratch
       modbus_rx_last_pos = 0;
       modbus_frame_ready = 0;
     }

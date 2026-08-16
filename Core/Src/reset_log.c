@@ -29,6 +29,7 @@ ResetCause_t get_reset_cause(void)
   return cause;
 }
 
+// Show the last cause of reset 
 void log_reset_cause_to_flash(ResetCause_t cause)
 {
   HAL_FLASH_Unlock();
@@ -47,6 +48,8 @@ void log_reset_cause_to_flash(ResetCause_t cause)
   HAL_FLASH_Lock();
 }
 
+
+// Read the last cause of reset 
 uint8_t read_last_reset_cause_from_flash(void)
 {
   return *(uint8_t*)RESET_LOG_FLASH_ADDR;
