@@ -25,7 +25,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "crc.h"
+#include "temp_sensor.h"
+#include "reset_log.h"
+#include "app_shared.h"
+#include "usart.h"
+#include "iwdg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -136,10 +141,82 @@ void MX_FREERTOS_Init(void) {
 void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
+  uint32_t last_temp_read_tick = 0;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+       // Save the current temp. into register_map every 1 second
+    if (HAL_GetTick() - last_temp_read_tick >= 1000) {
+  uint16_t temp = read_htu21d_temperature();
+
+  // Update the register on a valid reading; a failed read (0xFFFF) puts the node into FAULT state
+  if (temp == 0xFFFF) {
+    system_state = STATE_FAULT;
+    } else {
+    holding_registers_map[0] = temp;
+    system_state = STATE_NORMAL;
+    }
+
+  last_temp_read_tick = HAL_GetTick();
+}
+    if (modbus_frame_ready) {
+
+      // Shortest valid 0x03 request is 8 bytes: address + function + reg addr(2) + count(2) + CRC(2)
+      if (modbus_rx_len >= 8) {
+      // Frame integrity check: compare the CRC the sender attached and the CRC we compute ourselves
+      uint16_t received_crc = modbus_rx_buffer[modbus_rx_len - 2] | (modbus_rx_buffer[modbus_rx_len - 1] << 8); // CRC sent by the master (low byte first, then high byte)
+      uint16_t calculated_crc = crc16_modbus(modbus_rx_buffer, modbus_rx_len - 2); // CRC we calculate locally with the standard C algorithm (crc.c)
+
+
+      //  **** VERIFICATION ****
+      if (received_crc == calculated_crc) {
+        // CRC matches -> frame is valid
+        uint8_t slave_address = modbus_rx_buffer[0];
+        uint8_t function_code = modbus_rx_buffer[1];
+
+        // Respond only when addressed, for a supported function, and while not in FAULT (fail-safe: stay silent)
+        if (slave_address == SLAVE_ADDRESS && function_code == 0x03 && system_state != STATE_FAULT) {
+
+          uint16_t reg_address = (modbus_rx_buffer[2] << 8) | modbus_rx_buffer[3];
+          uint16_t reg_count = (modbus_rx_buffer[4] << 8) | modbus_rx_buffer[5];
+
+          // Reject reads past the register map; only single-register reads are supported for now
+          if (reg_address < REGISTER_COUNT && reg_count == 1) {
+
+            // Build the response frame
+
+            modbus_tx_buffer[0] = SLAVE_ADDRESS; // Device ID
+            modbus_tx_buffer[1] = 0x03; // function code (0x03 -> read)
+            modbus_tx_buffer[2] = 2; // byte count
+            modbus_tx_buffer[3] = (holding_registers_map[reg_address] >> 8) & 0xFF; // high byte
+            modbus_tx_buffer[4] = holding_registers_map[reg_address] & 0xFF; // low byte
+
+            // Compute CRC and attach it to the response
+            uint16_t response_crc = crc16_modbus(modbus_tx_buffer, 5);
+            modbus_tx_buffer[5] = response_crc & 0xFF;
+            modbus_tx_buffer[6] = (response_crc >> 8) & 0xFF;
+            
+            // Send the response back to the master
+            HAL_UART_Transmit(&huart2, modbus_tx_buffer, 7, HAL_MAX_DELAY);
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+          }
+        }
+      }
+      // else: CRC mismatch -> corrupted frame, just ignore it 
+      }
+
+      // Restart DMA so the next frame starts writing at buffer position 0 again
+      HAL_UART_DMAStop(&huart2);
+      HAL_UART_Receive_DMA(&huart2, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+
+      // Reset frame tracking so the next frame is detected from scratch
+      modbus_rx_last_pos = 0;
+      modbus_frame_ready = 0;
+    }
+
+          HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
+          osDelay(1);
+
   }
   /* USER CODE END StartModbusTask */
 }
