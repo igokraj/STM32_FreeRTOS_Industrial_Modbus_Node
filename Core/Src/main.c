@@ -19,7 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "cmsis_os2.h"
 #include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
@@ -68,6 +67,9 @@ volatile System_State_t system_state = STATE_INIT;
 
 // **** BINARY SEMAPHORE ****
 extern osSemaphoreId_t FrameReadySemaphoreHandle; // defined in freertos.c
+
+// **** DIAGNOSTIC TASK **** 
+volatile uint8_t task_alive_flags;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -118,7 +120,7 @@ int main(void)
   MX_TIM1_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  holding_registers_map[3] = 0x0203;
+  holding_registers_map[3] = 0x0206;
   // Firmware version exposed over Modbus 
 
   HAL_TIM_Base_Start_IT(&htim1);

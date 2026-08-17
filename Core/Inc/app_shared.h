@@ -27,3 +27,15 @@ typedef enum {
 
 // Only declaration (extern) belong here - the variable is defined in main.c.
 extern volatile System_State_t system_state;
+
+
+// **** DIAGNOSTIC TASK **** 
+
+// Each task sets its own bit; DiagnosticTask refreshes the watchdog only when all of them reported.
+#define ALIVE_MODBUS (1 << 0) // 0b00000001
+#define ALIVE_SENSOR (1 << 1) // 0b00000011
+#define ALIVE_DIAG   (1 << 2) // 0b00000111
+#define ALIVE_ALL    (ALIVE_MODBUS | ALIVE_SENSOR | ALIVE_DIAG)
+
+// Only declaration (extern) belong here - the variable is defined in main.c.
+extern volatile uint8_t task_alive_flags;

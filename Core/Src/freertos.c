@@ -152,9 +152,10 @@ void StartModbusTask(void *argument)
   /* USER CODE BEGIN StartModbusTask */
   /* Infinite loop */
   for(;;)
-  {
-      // Sleep until TIM1 callback signals a complete frame 
-      osSemaphoreAcquire(FrameReadySemaphoreHandle, osWaitForever);
+  { 
+
+      // Wake on a frame, or after 500 ms anyway, so the task can report that it is still alive
+      if (osSemaphoreAcquire(FrameReadySemaphoreHandle, 500) == osOK) {
 
       // Shortest valid 0x03 request is 8 bytes: address + function + reg addr(2) + count(2) + CRC(2)
       if (modbus_rx_len >= 8) {
@@ -207,7 +208,10 @@ void StartModbusTask(void *argument)
       // Reset frame tracking so the next frame is detected from scratch
       modbus_rx_last_pos = 0;
       modbus_frame_ready = 0;
+    }
 
+    // Reported on every wake-up, also after a timeout - that is what proves the task is not stuck
+    task_alive_flags |= ALIVE_MODBUS;
   }
   /* USER CODE END StartModbusTask */
 }
@@ -235,8 +239,9 @@ void StartSensorTask(void *argument)
     system_state = STATE_NORMAL;
     }
 
+  task_alive_flags |= ALIVE_SENSOR;
   osDelay(1000); // Save the current temp. into register_map every 1 second
-  HAL_IWDG_Refresh(&hiwdg); // Updates the watch dog every 1 second 
+
   }
   /* USER CODE END StartSensorTask */
 }
@@ -254,7 +259,24 @@ void StartDiagnosticTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    task_alive_flags |= ALIVE_DIAG;
+
+    // Feed the watchdog only when every task has reported since the last check.
+    // If any task hangs, the refresh stops happening and the MCU resets.
+    //
+    //   one task missing:            all tasks reported:
+    //   flags     = 0b00000101       flags     = 0b00000111
+    //   ALIVE_ALL = 0b00000111       ALIVE_ALL = 0b00000111
+    //             & ----------                 & ----------
+    //   result    = 0b00000101       result    = 0b00000111
+    //   -> != ALIVE_ALL, no refresh  -> == ALIVE_ALL, refresh
+    if ((task_alive_flags & ALIVE_ALL) == ALIVE_ALL)
+    {
+      HAL_IWDG_Refresh(&hiwdg);
+      task_alive_flags = 0; // clear, so each task must report again
+    }
+
+    osDelay(500);
   }
   /* USER CODE END StartDiagnosticTask */
 }
