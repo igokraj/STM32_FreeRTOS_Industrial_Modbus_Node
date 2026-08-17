@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include "cmsis_os2.h"
 #include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
@@ -64,6 +65,9 @@ uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
 // **** SYSTEM STATUS **** 
 volatile System_State_t system_state = STATE_INIT;
+
+// **** BINARY SEMAPHORE ****
+extern osSemaphoreId_t FrameReadySemaphoreHandle; // defined in freertos.c
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,7 +118,7 @@ int main(void)
   MX_TIM1_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  holding_registers_map[3] = 0x0202;
+  holding_registers_map[3] = 0x0203;
   // Firmware version exposed over Modbus 
 
   HAL_TIM_Base_Start_IT(&htim1);
@@ -245,6 +249,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     else if (pos != 0 && !modbus_frame_ready) {
       modbus_rx_len = pos;
       modbus_frame_ready = true;
+      osSemaphoreRelease(FrameReadySemaphoreHandle); // Wake up ModbusTask
     }
     }
   /* USER CODE END Callback 1 */

@@ -73,6 +73,11 @@ const osThreadAttr_t DiagnosticTask_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
+/* Definitions for FrameReadySemaphore */
+osSemaphoreId_t FrameReadySemaphoreHandle;
+const osSemaphoreAttr_t FrameReadySemaphore_attributes = {
+  .name = "FrameReadySemaphore"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -98,6 +103,10 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
+
+  /* Create the semaphores(s) */
+  /* creation of FrameReadySemaphore */
+  FrameReadySemaphoreHandle = osSemaphoreNew(1, 1, &FrameReadySemaphore_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
@@ -144,8 +153,8 @@ void StartModbusTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-       
-    if (modbus_frame_ready) {
+      // Sleep until TIM1 callback signals a complete frame 
+      osSemaphoreAcquire(FrameReadySemaphoreHandle, osWaitForever);
 
       // Shortest valid 0x03 request is 8 bytes: address + function + reg addr(2) + count(2) + CRC(2)
       if (modbus_rx_len >= 8) {
@@ -198,10 +207,6 @@ void StartModbusTask(void *argument)
       // Reset frame tracking so the next frame is detected from scratch
       modbus_rx_last_pos = 0;
       modbus_frame_ready = 0;
-    }
-
-          HAL_IWDG_Refresh(&hiwdg); // WatchDog Update - runs every loop iteration, not only when a frame arrives
-          osDelay(1);
 
   }
   /* USER CODE END StartModbusTask */
@@ -231,6 +236,7 @@ void StartSensorTask(void *argument)
     }
 
   osDelay(1000); // Save the current temp. into register_map every 1 second
+  HAL_IWDG_Refresh(&hiwdg); // Updates the watch dog every 1 second 
   }
   /* USER CODE END StartSensorTask */
 }
