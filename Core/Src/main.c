@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
@@ -76,6 +77,7 @@ volatile System_State_t system_state = STATE_INIT;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -101,10 +103,9 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-  __HAL_DBGMCU_FREEZE_IWDG(); // Freeze IWDG when the debugger halts the core, otherwise debugging resets the MCU
 
   /* USER CODE BEGIN Init */
-
+  __HAL_DBGMCU_FREEZE_IWDG();
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -133,6 +134,15 @@ int main(void)
   // Expose the cause of the reset that just happened as a Modbus register
   holding_registers_map[2] = read_last_reset_cause_from_flash();
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -266,9 +276,38 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-// Fires every 1.75 ms (TIM1 overflow). Detects Modbus frame end by checking whether the DMA write position has stayed the same since the last tick.
+
+
+
+// Read the state of the cylinder
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == Cylinder_Limit_Switch_Pin_Pin) {
+    holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
+  }
+}
+/* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  // Fires every 1.75 ms (TIM1 overflow). Detects Modbus frame end by checking whether the DMA write position has stayed the same since the last tick.
  if (htim->Instance == TIM1) { 
   
     // current DMA write offset in the buffer (counts up as bytes arrive)
@@ -284,16 +323,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       modbus_frame_ready = true;
     }
     }
+  /* USER CODE END Callback 1 */
 }
-
-// Read the state of the cylinder
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == Cylinder_Limit_Switch_Pin_Pin) {
-    holding_registers_map[1] = (HAL_GPIO_ReadPin(Cylinder_Limit_Switch_Pin_GPIO_Port, Cylinder_Limit_Switch_Pin_Pin) == GPIO_PIN_RESET);
-  }
-}
-/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
