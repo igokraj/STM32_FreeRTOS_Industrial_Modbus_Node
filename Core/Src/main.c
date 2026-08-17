@@ -114,7 +114,7 @@ int main(void)
   MX_TIM1_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  holding_registers_map[3] = 0x0201;
+  holding_registers_map[3] = 0x0202;
   // Firmware version exposed over Modbus 
 
   HAL_TIM_Base_Start_IT(&htim1);

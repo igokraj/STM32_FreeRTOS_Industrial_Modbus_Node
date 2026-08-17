@@ -141,24 +141,10 @@ void MX_FREERTOS_Init(void) {
 void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
-  uint32_t last_temp_read_tick = 0;
   /* Infinite loop */
   for(;;)
   {
-       // Save the current temp. into register_map every 1 second
-    if (HAL_GetTick() - last_temp_read_tick >= 1000) {
-  uint16_t temp = read_htu21d_temperature();
-
-  // Update the register on a valid reading; a failed read (0xFFFF) puts the node into FAULT state
-  if (temp == 0xFFFF) {
-    system_state = STATE_FAULT;
-    } else {
-    holding_registers_map[0] = temp;
-    system_state = STATE_NORMAL;
-    }
-
-  last_temp_read_tick = HAL_GetTick();
-}
+       
     if (modbus_frame_ready) {
 
       // Shortest valid 0x03 request is 8 bytes: address + function + reg addr(2) + count(2) + CRC(2)
@@ -234,7 +220,17 @@ void StartSensorTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+  uint16_t temp = read_htu21d_temperature();
+
+  // Update the register on a valid reading; a failed read (0xFFFF) puts the node into FAULT state
+  if (temp == 0xFFFF) {
+    system_state = STATE_FAULT;
+    } else {
+    holding_registers_map[0] = temp;
+    system_state = STATE_NORMAL;
+    }
+
+  osDelay(1000); // Save the current temp. into register_map every 1 second
   }
   /* USER CODE END StartSensorTask */
 }
