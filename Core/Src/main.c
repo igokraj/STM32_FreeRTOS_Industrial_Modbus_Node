@@ -59,7 +59,7 @@ uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE]; // Buffer for the circular DMA
 volatile uint16_t modbus_rx_len = 0; // Length of the frame, handled in callback (volatile)
 volatile bool modbus_frame_ready = 0; // Status of the frame, handled in callback (volatile)
 uint16_t modbus_rx_last_pos = 0; // DMA write position at the previous TIM1 tick
-uint16_t holding_registers_map[REGISTER_COUNT] = {0, 0 ,0 ,0}; // Register map
+uint16_t holding_registers_map[REGISTER_COUNT] = {0}; // Register map
 uint8_t modbus_tx_buffer[MODBUS_RX_BUFFER_SIZE]; // buffer for sending data
 
 // **** SYSTEM STATUS **** 
@@ -120,7 +120,7 @@ int main(void)
   MX_TIM1_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  holding_registers_map[3] = 0x0206;
+  holding_registers_map[3] = 0x0200;
   // Firmware version exposed over Modbus 
 
   HAL_TIM_Base_Start_IT(&htim1);
@@ -132,6 +132,9 @@ int main(void)
 
   // Expose the cause of the reset that just happened as a Modbus register
   holding_registers_map[2] = read_last_reset_cause_from_flash();
+
+  // Number of resets recorded in Flash since the last sector erase
+  holding_registers_map[4] = get_reset_count();
   /* USER CODE END 2 */
 
   /* Init scheduler */

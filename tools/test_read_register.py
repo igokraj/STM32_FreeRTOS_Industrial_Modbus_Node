@@ -133,9 +133,26 @@ def main():
 
     time.sleep(0.5)
 
-    # Test 5: read out-of-range register (5, but REGISTER_COUNT=4) - should get no response
-    bad_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=5, reg_count=1)
-    print(f"\n[5] Sending request (out-of-range register 5): {bad_request.hex(' ')}")
+    # Test 5: read register 4 - number of resets appended to the Flash log
+    count_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=4, reg_count=1)
+    print(f"\n[5] Sending request (read register 4 - reset count): {count_request.hex(' ')}")
+    ser.write(count_request)
+    time.sleep(0.1)
+    response = ser.read(64)
+    print(f"    Received: {response.hex(' ') if response else '(nothing)'}")
+
+    if len(response) == 7:
+        count = (response[3] << 8) | response[4]
+        print(f"    Resets logged: {count}")
+        print("    (run this again after a reset - the number should grow by one)")
+    else:
+        print("    FAIL - unexpected response length")
+
+    time.sleep(0.5)
+
+    # Test 6: read out-of-range register (6, but REGISTER_COUNT=5) - should get no response
+    bad_request = build_read_request(SLAVE_ADDRESS, READ_HOLDING_REGISTERS, reg_address=6, reg_count=1)
+    print(f"\n[6] Sending request (out-of-range register 6): {bad_request.hex(' ')}")
     ser.write(bad_request)
     time.sleep(0.1)
     response = ser.read(64)
@@ -144,9 +161,9 @@ def main():
 
     time.sleep(0.5)
 
-    # Test 6: wrong slave address (2 instead of 1) - should get no response
+    # Test 7: wrong slave address (2 instead of 1) - should get no response
     wrong_addr_request = build_read_request(2, READ_HOLDING_REGISTERS, reg_address=0, reg_count=1)
-    print(f"\n[6] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
+    print(f"\n[7] Sending request (wrong slave address 2): {wrong_addr_request.hex(' ')}")
     ser.write(wrong_addr_request)
     time.sleep(0.1)
     response = ser.read(64)

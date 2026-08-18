@@ -8,7 +8,7 @@
 // **** MODBUS ****
 #define MODBUS_RX_BUFFER_SIZE 256
 #define SLAVE_ADDRESS 1   // device ID
-#define REGISTER_COUNT 4  // Number of registers
+#define REGISTER_COUNT 5  // Number of registers
 
 // Only declarations (extern) belong here - the variables themselves are defined in main.c.
 extern uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE]; // Buffer for the circular DMA
