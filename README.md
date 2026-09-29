@@ -1,6 +1,8 @@
 # STM32_Industrial_Modbus_Node
 
-My primary goal for this project was to write a Modbus RTU stack from scratch — frame detection, CRC checksums, the register map. For me it was the best way to learn how this protocol works. I had worked with STM32 before, but this is my first project written to industry conventions rather than just to get something running. I also improved my skills in implementing FreeRTOS in the STM32 projects. Below, i added w photo of the project assembled on a breadboard.
+Głównym celem w tym projekcie było napisanie od podstaw urządzenia wykorzystującego protokół komunikacyjny Modbus, obejmujący wykrywanie ramek, sumy kontrolne CRC oraz mapę rejestrów. Był to dla mnie skuteczny sposób na zrozumienie zasad działania tego protokołu. Miałem już wcześniej doświadczenie z układami STM32, jednak jest to mój pierwszy projekt zrealizowany pod kątem wykorzystania przemysłowego. Przy okazji rozwinąłem również umiejętności związane z systemem FreeRTOS. Poniżej zamieściłem zdjęcie projektu zmontowanego i testowanego na płytce stykowej.
+
+My primary goal for this project was to write a Modbus RTU stack from scratch including frame detection, CRC checksums, the register map. For me it was the best way to learn how this protocol works. I had worked with STM32 before, but this is my first project written to industry conventions rather than just to get something running. I also improved my skills in implementing FreeRTOS in the STM32 projects. Below, i added w photo of the project assembled on a breadboard.
 
 ![Project on a breadboard](docs/Project.jpg)
 
